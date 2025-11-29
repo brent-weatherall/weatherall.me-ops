@@ -2,20 +2,14 @@
 # 1. TALOS IMAGE FACTORY
 # Generates a custom ISO with ZFS and QEMU Guest Agent extensions
 # ------------------------------------------------------------------------------
-data "talos_image_factory_extensions_versions" "this" {
-  # Validated stable version for Nov 2025 context
-  talos_version = "v1.8.3" 
-  filters = {
-    names = [
-      "zfs",              # Required for OpenEBS LocalPV ZFS storage
-      "qemu-guest-agent", # Required for Proxmox UI IP display & Shutdowns
-      "intel-ucode"       # Recommended for Intel CPUs
-    ]
-  }
-}
-
 resource "talos_image_factory_schematic" "this" {
-  schematic = data.talos_image_factory_extensions_versions.this.right
+  talos_version = "v1.8.3"
+  architecture  = "amd64"
+  extensions    = [
+    "siderolabs/zfs",              # Required for OpenEBS LocalPV ZFS storage
+    "siderolabs/qemu-guest-agent", # Required for Proxmox UI IP display
+    "siderolabs/intel-ucode"       # Recommended for Intel CPUs
+  ]
 }
 
 # ------------------------------------------------------------------------------
@@ -27,8 +21,8 @@ resource "proxmox_virtual_environment_download_file" "talos_iso" {
   datastore_id = "Local-ISOs"  # <--- MUST MATCH YOUR ISO STORAGE ID
   node_name    = "pve"         # <--- Change if your node is named differently
   
-  file_name    = "talos-${data.talos_image_factory_extensions_versions.this.talos_version}-zfs.iso"
-  url          = "${talos_image_factory_schematic.this.id.urls.iso}"
+  file_name    = "talos-${talos_image_factory_schematic.this.talos_version}-zfs.iso"
+  url          = talos_image_factory_schematic.this.urls.iso
 }
 
 # ------------------------------------------------------------------------------
@@ -42,7 +36,7 @@ data "talos_machine_configuration" "controlplane" {
   machine_type     = "controlplane"
   cluster_endpoint = "https://192.168.1.50:6443" # Pointing to the VIP (.50)
   machine_secrets  = talos_machine_secrets.this.machine_secrets
-  talos_version    = data.talos_image_factory_extensions_versions.this.talos_version
+  talos_version    = talos_image_factory_schematic.this.talos_version
   
   config_patches = [
     yamlencode({
@@ -79,7 +73,7 @@ data "talos_machine_configuration" "worker" {
   machine_type     = "worker"
   cluster_endpoint = "https://192.168.1.50:6443" # Workers talk to the VIP
   machine_secrets  = talos_machine_secrets.this.machine_secrets
-  talos_version    = data.talos_image_factory_extensions_versions.this.talos_version
+  talos_version    = talos_image_factory_schematic.this.talos_version
   
   config_patches = [
     yamlencode({
@@ -132,7 +126,7 @@ resource "proxmox_virtual_environment_vm" "controlplane" {
   agent { enabled = true }
   
   disk {
-    datastore_id = "storage-pool" # <--- MUST MATCH YOUR ZPOOL STORAGE ID
+    datastore_id = "storage-pool" # <--- YOUR ZFS POOL ID
     file_format  = "raw"
     interface    = "scsi0"
     size         = 20
@@ -183,7 +177,7 @@ resource "proxmox_virtual_environment_vm" "worker" {
   agent { enabled = true }
 
   disk {
-    datastore_id = "storage-pool"
+    datastore_id = "storage-pool" # <--- YOUR ZFS POOL ID
     file_format  = "raw"
     interface    = "scsi0"
     size         = 50
@@ -231,16 +225,17 @@ resource "talos_machine_configuration_apply" "worker" {
   node                        = "192.168.1.${52 + count.index}"
 }
 
-resource "talos_cluster_bootstrap" "this" {
+# FIX: Resource name changed from talos_cluster_bootstrap to talos_machine_bootstrap
+resource "talos_machine_bootstrap" "this" {
   depends_on           = [talos_machine_configuration_apply.controlplane]
   client_configuration = talos_machine_secrets.this.client_configuration
   node                 = "192.168.1.51" # Bootstrap via Physical IP
 }
 
 resource "talos_cluster_kubeconfig" "this" {
-  depends_on           = [talos_cluster_bootstrap.this]
+  depends_on           = [talos_machine_bootstrap.this]
   client_configuration = talos_machine_secrets.this.client_configuration
-  node                 = "192.168.1.51"
+  node                 = "192.168.1.51" # Retrieve config from Physical Node
 }
 
 # ------------------------------------------------------------------------------
