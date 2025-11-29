@@ -3,7 +3,7 @@ terraform {
 
   backend "s3" {
     bucket                      = "homelab-tf-state"
-    key                         = "talos/terraform.tfstate"
+    key                         = "talos/cluster_v1.tfstate"
     
     # 1. Region Validation
     # R2 ignores regions, but Terraform demands one. "auto" or "us-east-1" is fine.
