@@ -40,6 +40,14 @@ terraform {
       source  = "siderolabs/talos"
       version = "0.6.1"
     }
+    helm = {
+      source  = "hashicorp/helm"
+      version = "2.16.1"
+    }
+    kubernetes = {
+      source  = "hashicorp/kubernetes"
+      version = "2.33.0"
+    }
   }
 }
 
@@ -68,4 +76,21 @@ provider "proxmox" {
 
 provider "talos" {
   # No configuration needed for the provider itself
+}
+
+provider "kubernetes" {
+  host                   = data.talos_cluster_kubeconfig.this.kubernetes_client_configuration.host
+  client_certificate     = base64decode(data.talos_cluster_kubeconfig.this.kubernetes_client_configuration.client_certificate)
+  client_key             = base64decode(data.talos_cluster_kubeconfig.this.kubernetes_client_configuration.client_key)
+  cluster_ca_certificate = base64decode(data.talos_cluster_kubeconfig.this.kubernetes_client_configuration.ca_certificate)
+}
+
+# Ensure Helm uses the same creds
+provider "helm" {
+  kubernetes {
+    host                   = data.talos_cluster_kubeconfig.this.kubernetes_client_configuration.host
+    client_certificate     = base64decode(data.talos_cluster_kubeconfig.this.kubernetes_client_configuration.client_certificate)
+    client_key             = base64decode(data.talos_cluster_kubeconfig.this.kubernetes_client_configuration.client_key)
+    cluster_ca_certificate = base64decode(data.talos_cluster_kubeconfig.this.kubernetes_client_configuration.ca_certificate)
+  }
 }
