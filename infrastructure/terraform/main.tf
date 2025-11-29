@@ -30,6 +30,7 @@ resource "proxmox_virtual_environment_download_file" "talos_iso" {
   # We construct the URL manually because the resource only outputs the ID.
   # Platform 'nocloud' allows Talos to read the IP config from Proxmox Cloud-Init.
   url = "https://factory.talos.dev/image/${talos_image_factory_schematic.this.id}/v1.8.3/nocloud-amd64.iso"
+  overwrite    = false
 }
 
 # ------------------------------------------------------------------------------
@@ -128,7 +129,9 @@ resource "proxmox_virtual_environment_vm" "controlplane" {
   }
 
   agent { enabled = true }
-  
+
+  depends_on = [proxmox_virtual_environment_download_file.talos_iso]
+
   disk {
     datastore_id = "storage-pool"
     file_format  = "raw"
@@ -180,6 +183,8 @@ resource "proxmox_virtual_environment_vm" "worker" {
   }
 
   agent { enabled = true }
+
+  depends_on = [proxmox_virtual_environment_download_file.talos_iso]
 
   disk {
     datastore_id = "storage-pool"
