@@ -131,7 +131,10 @@ resource "proxmox_virtual_environment_vm" "controlplane" {
     floating  = 2048 
   }
 
-  agent { enabled = true }
+  agent { 
+    enabled = true  
+    timeout = "10s"
+  }
 
   depends_on = [proxmox_virtual_environment_download_file.talos_iso]
 
