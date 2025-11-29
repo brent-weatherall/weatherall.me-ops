@@ -58,3 +58,47 @@ jobs:
           # R2 Endpoint (IMPORTANT: Must specify here or in config)
           AWS_ENDPOINT_URL_S3: ${{ secrets.R2_ENDPOINT_URL }} 
         run: terraform apply -auto-approve tfplan
+
+      - name: Extract & Save Cluster Keys
+        # Only run on Master pushes
+        if: github.ref == 'refs/heads/master' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        run: |
+          echo "Current Automation User: $(whoami)"
+          
+          # ---------------------------------------------------------
+          # 1. Save for Automation (User: github-runner)
+          # ---------------------------------------------------------
+          mkdir -p ~/.kube
+          mkdir -p ~/.talos
+          
+          terraform output -raw kubeconfig > ~/.kube/config
+          terraform output -raw talosconfig > ~/.talos/config
+          chmod 600 ~/.kube/config ~/.talos/config
+          
+          echo "✅ Keys saved for CI/CD usage"
+
+          # ---------------------------------------------------------
+          # 2. Save for YOU (User: bweatherall)
+          # ---------------------------------------------------------
+          TARGET_USER="bweatherall"
+          
+          if id "$TARGET_USER" &>/dev/null; then
+            TARGET_HOME="/home/$TARGET_USER"
+            
+            # Create directories (as root)
+            sudo mkdir -p $TARGET_HOME/.kube
+            sudo mkdir -p $TARGET_HOME/.talos
+            
+            # Copy files
+            sudo cp ~/.kube/config $TARGET_HOME/.kube/config
+            sudo cp ~/.talos/config $TARGET_HOME/.talos/config
+            
+            # Fix Ownership (Crucial so you can read them!)
+            sudo chown -R $TARGET_USER:$TARGET_USER $TARGET_HOME/.kube
+            sudo chown -R $TARGET_USER:$TARGET_USER $TARGET_HOME/.talos
+            sudo chmod 600 $TARGET_HOME/.kube/config $TARGET_HOME/.talos/config
+            
+            echo "✅ Keys copied to $TARGET_HOME for SCP access"
+          else
+            echo "⚠️ User $TARGET_USER not found! Skipping copy."
+          fi
