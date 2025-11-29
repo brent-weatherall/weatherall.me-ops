@@ -1,6 +1,17 @@
 terraform {
   required_version = ">= 1.9.0"
 
+  backend "s3" {
+    bucket                      = "homelab-tf-state" # Your bucket name
+    key                         = "talos/terraform.tfstate"
+    region                      = "auto"
+    skip_credentials_validation = true
+    skip_metadata_api_check     = true
+    skip_region_validation      = true
+    skip_requesting_account_id  = true
+    use_path_style              = true
+  }
+
   required_providers {
     # Validated as latest stable for Nov 2025
     proxmox = {
