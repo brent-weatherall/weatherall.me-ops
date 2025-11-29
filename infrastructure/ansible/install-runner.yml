@@ -13,8 +13,6 @@
     
     # 3. Tags: Important for your CI/CD workflow selection
     runner_labels:
-      - "self-hosted"
-      - "linux"
       - "oracle-cloud"
       - "ansible-managed"
 
@@ -39,5 +37,17 @@
         dest: "/etc/sudoers.d/{{ runner_user }}"
         mode: '0440'
         validate: 'visudo -cf %s'
+    
+    - name: Install dependencies (NodeJS required for Actions)
+      ansible.builtin.package:
+        name:
+          - nodejs
+          - npm
+          - unzip
+          - tar
+          - git
+        state: present
+        update_cache: yes
+
   roles:
     - role: monolithprojects.github_actions_runner

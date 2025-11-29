@@ -1,16 +1,3 @@
-terraform {
-  required_providers {
-    proxmox = {
-      source  = "bpg/proxmox"
-      version = "0.66.1"
-    }
-    talos = {
-      source  = "siderolabs/talos"
-      version = "0.6.1"
-    }
-  }
-}
-
 # ------------------------------------------------------------------------------
 # 1. TALOS IMAGE FACTORY
 # Generates a custom ISO with ZFS and QEMU Guest Agent extensions
