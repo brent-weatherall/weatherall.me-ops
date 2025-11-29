@@ -268,7 +268,7 @@ resource "talos_cluster_kubeconfig" "this" {
 data "talos_client_configuration" "this" {
   cluster_name         = "talos-home"
   client_configuration = talos_machine_secrets.this.client_configuration
-  endpoints            = ["192.168.1.50"] # <--- Points your local talosctl to the VIP
+  endpoints            = ["192.168.1.51"] # <--- Points your local talosctl to the VIP
 }
 
 # ------------------------------------------------------------------------------
