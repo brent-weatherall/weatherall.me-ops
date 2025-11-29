@@ -42,7 +42,7 @@ resource "talos_machine_secrets" "this" {}
 data "talos_machine_configuration" "controlplane" {
   cluster_name     = "talos-home"
   machine_type     = "controlplane"
-  cluster_endpoint = "https://192.168.1.50:6443" # VIP (.50)
+  cluster_endpoint = "https://192.168.1.51:6443" # VIP (.50)
   machine_secrets  = talos_machine_secrets.this.machine_secrets
   talos_version    = "v1.8.3"
   
@@ -79,7 +79,7 @@ data "talos_machine_configuration" "worker" {
   count            = 2
   cluster_name     = "talos-home"
   machine_type     = "worker"
-  cluster_endpoint = "https://192.168.1.50:6443"
+  cluster_endpoint = "https://192.168.1.51:6443"
   machine_secrets  = talos_machine_secrets.this.machine_secrets
   talos_version    = "v1.8.3"
   

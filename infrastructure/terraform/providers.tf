@@ -79,7 +79,7 @@ provider "talos" {
 }
 
 provider "kubernetes" {
-  host                   = replace(data.talos_cluster_kubeconfig.this.kubernetes_client_configuration.host, "192.168.1.50", "192.168.1.51")
+  host = data.talos_cluster_kubeconfig.this.kubernetes_client_configuration.host
   client_certificate     = base64decode(data.talos_cluster_kubeconfig.this.kubernetes_client_configuration.client_certificate)
   client_key             = base64decode(data.talos_cluster_kubeconfig.this.kubernetes_client_configuration.client_key)
   cluster_ca_certificate = base64decode(data.talos_cluster_kubeconfig.this.kubernetes_client_configuration.ca_certificate)
@@ -88,7 +88,7 @@ provider "kubernetes" {
 # Ensure Helm uses the same creds
 provider "helm" {
   kubernetes {
-    host                   = replace(data.talos_cluster_kubeconfig.this.kubernetes_client_configuration.host, "192.168.1.50", "192.168.1.51")
+    host = data.talos_cluster_kubeconfig.this.kubernetes_client_configuration.host
     client_certificate     = base64decode(data.talos_cluster_kubeconfig.this.kubernetes_client_configuration.client_certificate)
     client_key             = base64decode(data.talos_cluster_kubeconfig.this.kubernetes_client_configuration.client_key)
     cluster_ca_certificate = base64decode(data.talos_cluster_kubeconfig.this.kubernetes_client_configuration.ca_certificate)
