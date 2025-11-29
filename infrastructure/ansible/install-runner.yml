@@ -1,0 +1,43 @@
+---
+- name: Install Self-Hosted GitHub Runner
+  hosts: runners
+  become: true
+  vars:
+    # 1. Scope: Where can this runner be used?
+    # Change to your GitHub Username or Organization Name
+    github_account: "brent-weatherall"
+    github_repo: "weatherall.me-ops"
+
+    # 2. Runner Name (Appears in GitHub Settings)
+    runner_name: "oracle-cloud-runner"
+    
+    # 3. Tags: Important for your CI/CD workflow selection
+    runner_labels:
+      - "self-hosted"
+      - "linux"
+      - "oracle-cloud"
+      - "ansible-managed"
+
+    # 4. System User: Run as a dedicated user, not root
+    runner_user: "github-runner"
+    
+    # 5. Auto-Update: Let the runner update itself
+    runner_auto_update: true
+
+  pre_tasks:
+    - name: Create the runner user manually (Fix role dependency)
+      ansible.builtin.user:
+        name: "{{ runner_user }}"
+        comment: "GitHub Actions Runner"
+        shell: /bin/bash
+        create_home: yes
+        state: present
+
+    - name: Grant passwordless sudo to runner user
+      ansible.builtin.copy:
+        content: "{{ runner_user }} ALL=(ALL) NOPASSWD:ALL"
+        dest: "/etc/sudoers.d/{{ runner_user }}"
+        mode: '0440'
+        validate: 'visudo -cf %s'
+  roles:
+    - role: monolithprojects.github_actions_runner
