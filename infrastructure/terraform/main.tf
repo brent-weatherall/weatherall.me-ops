@@ -283,3 +283,11 @@ output "kubeconfig" {
   value     = talos_cluster_kubeconfig.this.kubeconfig_raw
   sensitive = true
 }
+# ------------------------------------------------------------------------------
+# 7. DATA SOURCES (Needed for Helm/Kubernetes Providers)
+# ------------------------------------------------------------------------------
+data "talos_cluster_kubeconfig" "this" {
+  depends_on           = [talos_machine_bootstrap.this]
+  client_configuration = talos_machine_secrets.this.client_configuration
+  node                 = "192.168.1.51"
+}
