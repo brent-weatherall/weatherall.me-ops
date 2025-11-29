@@ -264,11 +264,18 @@ resource "talos_cluster_kubeconfig" "this" {
   node                 = "192.168.1.51"
 }
 
+data "talos_client_configuration" "this" {
+  cluster_name         = "talos-home"
+  client_configuration = talos_machine_secrets.this.client_configuration
+  endpoints            = ["192.168.1.50"] # <--- Points your local talosctl to the VIP
+}
+
 # ------------------------------------------------------------------------------
 # 6. OUTPUTS
 # ------------------------------------------------------------------------------
 output "talosconfig" {
-  value     = talos_machine_secrets.this.client_configuration
+  # Now outputs a raw string instead of an object
+  value     = data.talos_client_configuration.this.talos_config
   sensitive = true
 }
 
