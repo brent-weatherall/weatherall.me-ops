@@ -5,6 +5,9 @@ resource "helm_release" "cilium" {
   version    = "1.16.1"
   namespace  = "kube-system"
 
+  wait       = false  # Don't wait for pods (Avoids Deadlock)
+  timeout    = 600    # Give it 10 minutes just in case
+
   depends_on = [
     talos_machine_bootstrap.this,
     data.talos_cluster_kubeconfig.this
