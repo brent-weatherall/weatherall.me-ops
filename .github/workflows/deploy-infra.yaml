@@ -1,0 +1,47 @@
+name: Deploy Infrastructure
+on:
+  push:
+    branches:
+      - main
+    paths:
+      # Only run this when Terraform files change
+      - 'infrastructure/terraform/**'
+  workflow_dispatch: # Allows manual trigger button
+
+jobs:
+  terraform:
+    name: Terraform Apply
+    # This targets your specific self-hosted runner on Oracle Cloud
+    runs-on: [self-hosted, oracle-cloud]
+    
+    defaults:
+      run:
+        # Crucial: Run commands inside the terraform folder, not root
+        working-directory: infrastructure/terraform
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.0"
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Plan
+        env:
+          # These map your GitHub Secrets to the variables in providers.tf
+          TF_VAR_virtual_environment_endpoint: ${{ secrets.PROXMOX_API_ENDPOINT }}
+          TF_VAR_virtual_environment_api_token: ${{ secrets.PROXMOX_API_TOKEN }}
+        run: terraform plan -out=tfplan
+
+      - name: Terraform Apply
+        # Only run 'apply' if we are on the main branch
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        env:
+          TF_VAR_virtual_environment_endpoint: ${{ secrets.PROXMOX_API_ENDPOINT }}
+          TF_VAR_virtual_environment_api_token: ${{ secrets.PROXMOX_API_TOKEN }}
+        run: terraform apply -auto-approve tfplan
