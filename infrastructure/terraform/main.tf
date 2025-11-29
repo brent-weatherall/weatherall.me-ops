@@ -1,42 +1,49 @@
 # ------------------------------------------------------------------------------
 # 1. TALOS IMAGE FACTORY
-# Generates a custom ISO with ZFS and QEMU Guest Agent extensions
+# Defines the OS extensions (ZFS, Guest Agent) via a schematic ID.
 # ------------------------------------------------------------------------------
 resource "talos_image_factory_schematic" "this" {
-  talos_version = "v1.8.3"
-  architecture  = "amd64"
-  extensions    = [
-    "siderolabs/zfs",              # Required for OpenEBS LocalPV ZFS storage
-    "siderolabs/qemu-guest-agent", # Required for Proxmox UI IP display
-    "siderolabs/intel-ucode"       # Recommended for Intel CPUs
-  ]
+  schematic = yamlencode({
+    customization = {
+      systemExtensions = {
+        officialExtensions = [
+          "siderolabs/zfs",              # Storage
+          "siderolabs/qemu-guest-agent", # Proxmox Integration
+          "siderolabs/intel-ucode"       # CPU Microcode
+        ]
+      }
+    }
+  })
 }
 
 # ------------------------------------------------------------------------------
 # 2. ISO DOWNLOAD
-# Tells Proxmox to download the generated ISO to your Local-ISOs storage
+# Constructs the Factory URL and downloads it to Proxmox.
 # ------------------------------------------------------------------------------
 resource "proxmox_virtual_environment_download_file" "talos_iso" {
   content_type = "iso"
-  datastore_id = "Local-ISOs"  # <--- MUST MATCH YOUR ISO STORAGE ID
-  node_name    = "pve"         # <--- Change if your node is named differently
+  datastore_id = "Local-ISOs" 
+  node_name    = "pve"
   
-  file_name    = "talos-${talos_image_factory_schematic.this.talos_version}-zfs.iso"
-  url          = talos_image_factory_schematic.this.urls.iso
+  file_name    = "talos-v1.8.3-zfs.iso"
+  
+  # We construct the URL manually because the resource only outputs the ID.
+  # Platform 'nocloud' allows Talos to read the IP config from Proxmox Cloud-Init.
+  url = "https://factory.talos.dev/image/${talos_image_factory_schematic.this.id}/v1.8.3/nocloud-amd64.iso"
 }
 
 # ------------------------------------------------------------------------------
 # 3. TALOS CONFIGURATION
-# Generates the machine config (YAML) with patches for Static IPs & Istio
+# Generates the machine config (YAML) with patches for Static IPs & Istio.
 # ------------------------------------------------------------------------------
 resource "talos_machine_secrets" "this" {}
 
 data "talos_machine_configuration" "controlplane" {
   cluster_name     = "talos-home"
   machine_type     = "controlplane"
-  cluster_endpoint = "https://192.168.1.50:6443" # Pointing to the VIP (.50)
+  cluster_endpoint = "https://192.168.1.50:6443" # VIP (.50)
   machine_secrets  = talos_machine_secrets.this.machine_secrets
-  talos_version    = talos_image_factory_schematic.this.talos_version
+  talos_version    = "v1.8.3"
   
   config_patches = [
     yamlencode({
@@ -46,9 +53,9 @@ data "talos_machine_configuration" "controlplane" {
           interfaces = [{
             interface = "eth0"
             dhcp      = false
-            addresses = ["192.168.1.51/24"] # Physical IP (.51)
+            addresses = ["192.168.1.51/24"]
             routes    = [{ network = "0.0.0.0/0", gateway = "192.168.1.1" }]
-            vip       = { ip = "192.168.1.50" } # The VIP (.50) managed by this node
+            vip       = { ip = "192.168.1.50" }
           }]
           nameservers = ["1.1.1.1", "192.168.1.1"]
         }
@@ -71,9 +78,9 @@ data "talos_machine_configuration" "worker" {
   count            = 2
   cluster_name     = "talos-home"
   machine_type     = "worker"
-  cluster_endpoint = "https://192.168.1.50:6443" # Workers talk to the VIP
+  cluster_endpoint = "https://192.168.1.50:6443"
   machine_secrets  = talos_machine_secrets.this.machine_secrets
-  talos_version    = talos_image_factory_schematic.this.talos_version
+  talos_version    = "v1.8.3"
   
   config_patches = [
     yamlencode({
@@ -83,7 +90,6 @@ data "talos_machine_configuration" "worker" {
           interfaces = [{
             interface = "eth0"
             dhcp      = false
-            # Logic: Starts at .52 (52 + 0 = 52, 52 + 1 = 53)
             addresses = ["192.168.1.${52 + count.index}/24"] 
             routes    = [{ network = "0.0.0.0/0", gateway = "192.168.1.1" }]
           }]
@@ -104,7 +110,6 @@ data "talos_machine_configuration" "worker" {
 
 # ------------------------------------------------------------------------------
 # 4. VIRTUAL MACHINES
-# Creates the VMs in Proxmox with Memory Ballooning enabled
 # ------------------------------------------------------------------------------
 resource "proxmox_virtual_environment_vm" "controlplane" {
   name        = "talos-cp-01"
@@ -117,7 +122,6 @@ resource "proxmox_virtual_environment_vm" "controlplane" {
     type  = "x86-64-v2-AES"
   }
   
-  # RAM OPTIMIZATION: Max 4GB, Min 2GB
   memory {
     dedicated = 4096
     floating  = 2048 
@@ -126,7 +130,7 @@ resource "proxmox_virtual_environment_vm" "controlplane" {
   agent { enabled = true }
   
   disk {
-    datastore_id = "storage-pool" # <--- YOUR ZFS POOL ID
+    datastore_id = "storage-pool"
     file_format  = "raw"
     interface    = "scsi0"
     size         = 20
@@ -134,10 +138,12 @@ resource "proxmox_virtual_environment_vm" "controlplane" {
     discard      = "on" 
   }
 
+  # IMPORTANT: This block generates a Cloud-Init drive.
+  # Since we use the 'nocloud' ISO, Talos reads this for the initial Static IP.
   initialization {
     ip_config {
       ipv4 {
-        address = "192.168.1.51/24" # Physical IP
+        address = "192.168.1.51/24"
         gateway = "192.168.1.1"
       }
     }
@@ -152,7 +158,7 @@ resource "proxmox_virtual_environment_vm" "controlplane" {
   }
   
   operating_system {
-    type = "l26" # Linux 2.6+
+    type = "l26"
   }
 }
 
@@ -168,7 +174,6 @@ resource "proxmox_virtual_environment_vm" "worker" {
     type  = "x86-64-v2-AES"
   }
   
-  # RAM OPTIMIZATION: Max 8GB, Min 4GB
   memory {
     dedicated = 8192
     floating  = 4096 
@@ -177,7 +182,7 @@ resource "proxmox_virtual_environment_vm" "worker" {
   agent { enabled = true }
 
   disk {
-    datastore_id = "storage-pool" # <--- YOUR ZFS POOL ID
+    datastore_id = "storage-pool"
     file_format  = "raw"
     interface    = "scsi0"
     size         = 50
@@ -188,7 +193,6 @@ resource "proxmox_virtual_environment_vm" "worker" {
   initialization {
     ip_config {
       ipv4 {
-        # Logic: 192.168.1.52, .53
         address = "192.168.1.${52 + count.index}/24"
         gateway = "192.168.1.1"
       }
@@ -210,12 +214,11 @@ resource "proxmox_virtual_environment_vm" "worker" {
 
 # ------------------------------------------------------------------------------
 # 5. BOOTSTRAP
-# Pushes config to the nodes and bootstraps the cluster
 # ------------------------------------------------------------------------------
 resource "talos_machine_configuration_apply" "controlplane" {
   client_configuration        = talos_machine_secrets.this.client_configuration
   machine_configuration_input = data.talos_machine_configuration.controlplane.machine_configuration
-  node                        = "192.168.1.51" # Target the Physical IP, NOT the VIP
+  node                        = "192.168.1.51"
 }
 
 resource "talos_machine_configuration_apply" "worker" {
@@ -225,17 +228,16 @@ resource "talos_machine_configuration_apply" "worker" {
   node                        = "192.168.1.${52 + count.index}"
 }
 
-# FIX: Resource name changed from talos_cluster_bootstrap to talos_machine_bootstrap
 resource "talos_machine_bootstrap" "this" {
   depends_on           = [talos_machine_configuration_apply.controlplane]
   client_configuration = talos_machine_secrets.this.client_configuration
-  node                 = "192.168.1.51" # Bootstrap via Physical IP
+  node                 = "192.168.1.51"
 }
 
 resource "talos_cluster_kubeconfig" "this" {
   depends_on           = [talos_machine_bootstrap.this]
   client_configuration = talos_machine_secrets.this.client_configuration
-  node                 = "192.168.1.51" # Retrieve config from Physical Node
+  node                 = "192.168.1.51"
 }
 
 # ------------------------------------------------------------------------------
