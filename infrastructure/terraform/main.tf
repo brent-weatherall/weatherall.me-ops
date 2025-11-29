@@ -132,7 +132,7 @@ resource "proxmox_virtual_environment_vm" "controlplane" {
   }
 
   agent { 
-    enabled = true  
+    enabled = false  
     timeout = "10s"
   }
 
@@ -194,7 +194,7 @@ resource "proxmox_virtual_environment_vm" "worker" {
     floating  = 4096 
   }
 
-  agent { enabled = true }
+  agent { enabled = false }
 
   depends_on = [proxmox_virtual_environment_download_file.talos_iso]
 
