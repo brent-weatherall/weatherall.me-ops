@@ -219,6 +219,7 @@ resource "talos_machine_configuration_apply" "controlplane" {
   client_configuration        = talos_machine_secrets.this.client_configuration
   machine_configuration_input = data.talos_machine_configuration.controlplane.machine_configuration
   node                        = "192.168.1.51"
+  depends_on = [proxmox_virtual_environment_vm.controlplane]
 }
 
 resource "talos_machine_configuration_apply" "worker" {
@@ -226,6 +227,7 @@ resource "talos_machine_configuration_apply" "worker" {
   client_configuration        = talos_machine_secrets.this.client_configuration
   machine_configuration_input = data.talos_machine_configuration.worker[count.index].machine_configuration
   node                        = "192.168.1.${52 + count.index}"
+  depends_on = [proxmox_virtual_environment_vm.worker]
 }
 
 resource "talos_machine_bootstrap" "this" {
