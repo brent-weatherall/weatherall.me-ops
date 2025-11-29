@@ -118,9 +118,12 @@ resource "proxmox_virtual_environment_vm" "controlplane" {
   vm_id       = 200
   tags        = ["k8s", "talos", "control-plane"]
   
+  # 1. Force Boot Order: ISO (ide3) -> Disk (scsi0) -> Network
+  boot_order = ["ide3", "scsi0", "net0"]
+
   cpu {
     cores = 2
-    type  = "x86-64-v2-AES"
+    type  = "host" # Changed to 'host' to prevent boot loops on consumer hardware
   }
   
   memory {
@@ -141,9 +144,9 @@ resource "proxmox_virtual_environment_vm" "controlplane" {
     discard      = "on" 
   }
 
-  # IMPORTANT: This block generates a Cloud-Init drive.
-  # Since we use the 'nocloud' ISO, Talos reads this for the initial Static IP.
+  # 2. Cloud-Init on IDE2
   initialization {
+    interface = "ide2" # Explicitly assign to IDE2
     ip_config {
       ipv4 {
         address = "192.168.1.51/24"
@@ -156,8 +159,11 @@ resource "proxmox_virtual_environment_vm" "controlplane" {
     bridge = "vmbr0"
   }
 
+  # 3. ISO on IDE3
   cdrom {
-    file_id = proxmox_virtual_environment_download_file.talos_iso.id
+    enabled   = true   # Explicitly enable
+    interface = "ide3" # Explicitly assign to IDE3 (No conflict!)
+    file_id   = proxmox_virtual_environment_download_file.talos_iso.id
   }
   
   operating_system {
@@ -172,9 +178,12 @@ resource "proxmox_virtual_environment_vm" "worker" {
   vm_id       = 300 + count.index
   tags        = ["k8s", "talos", "worker"]
   
+  # 1. Force Boot Order
+  boot_order = ["ide3", "scsi0", "net0"]
+  
   cpu {
     cores = 4
-    type  = "x86-64-v2-AES"
+    type  = "host"
   }
   
   memory {
@@ -195,7 +204,9 @@ resource "proxmox_virtual_environment_vm" "worker" {
     discard      = "on"
   }
 
+  # 2. Cloud-Init on IDE2
   initialization {
+    interface = "ide2"
     ip_config {
       ipv4 {
         address = "192.168.1.${52 + count.index}/24"
@@ -208,8 +219,11 @@ resource "proxmox_virtual_environment_vm" "worker" {
     bridge = "vmbr0"
   }
 
+  # 3. ISO on IDE3
   cdrom {
-    file_id = proxmox_virtual_environment_download_file.talos_iso.id
+    enabled   = true
+    interface = "ide3"
+    file_id   = proxmox_virtual_environment_download_file.talos_iso.id
   }
   
   operating_system {
