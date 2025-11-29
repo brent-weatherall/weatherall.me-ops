@@ -36,34 +36,34 @@ resource "helm_release" "cilium" {
   ]
 }
 
-# Define the Pool: 192.168.1.60 - .69
-resource "kubernetes_manifest" "cilium_ip_pool" {
-  depends_on = [helm_release.cilium]
-  manifest = {
-    apiVersion = "cilium.io/v2alpha1"
-    kind       = "CiliumLoadBalancerIPPool"
-    metadata   = { name = "homelab-pool" }
-    spec = {
-      cidrs = ["192.168.1.60/32", "192.168.1.61/32"]
-      serviceSelector = {
-        matchLabels = { "io.cilium/lb-ip-pool" = "homelab-pool" }
-      }
-    }
-  }
-}
+# # Define the Pool: 192.168.1.60 - .69
+# resource "kubernetes_manifest" "cilium_ip_pool" {
+#   depends_on = [helm_release.cilium]
+#   manifest = {
+#     apiVersion = "cilium.io/v2alpha1"
+#     kind       = "CiliumLoadBalancerIPPool"
+#     metadata   = { name = "homelab-pool" }
+#     spec = {
+#       cidrs = ["192.168.1.60/32", "192.168.1.61/32"]
+#       serviceSelector = {
+#         matchLabels = { "io.cilium/lb-ip-pool" = "homelab-pool" }
+#       }
+#     }
+#   }
+# }
 
-# Define the Broadcast Policy
-resource "kubernetes_manifest" "cilium_l2_policy" {
-  depends_on = [helm_release.cilium]
-  manifest = {
-    apiVersion = "cilium.io/v2alpha1"
-    kind       = "CiliumL2AnnouncementPolicy"
-    metadata   = { name = "homelab-policy" }
-    spec = {
-      nodeSelector = { matchExpressions = [{ key = "node-role.kubernetes.io/control-plane", operator = "DoesNotExist" }] }
-      interfaces = ["eth0"]
-      externalIPs = true
-      loadBalancerIPs = true
-    }
-  }
-}
+# # Define the Broadcast Policy
+# resource "kubernetes_manifest" "cilium_l2_policy" {
+#   depends_on = [helm_release.cilium]
+#   manifest = {
+#     apiVersion = "cilium.io/v2alpha1"
+#     kind       = "CiliumL2AnnouncementPolicy"
+#     metadata   = { name = "homelab-policy" }
+#     spec = {
+#       nodeSelector = { matchExpressions = [{ key = "node-role.kubernetes.io/control-plane", operator = "DoesNotExist" }] }
+#       interfaces = ["eth0"]
+#       externalIPs = true
+#       loadBalancerIPs = true
+#     }
+#   }
+# }
