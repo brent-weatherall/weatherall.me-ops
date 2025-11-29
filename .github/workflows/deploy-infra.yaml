@@ -58,7 +58,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           # R2 Endpoint (IMPORTANT: Must specify here or in config)
           AWS_ENDPOINT_URL_S3: ${{ secrets.R2_ENDPOINT_URL }} 
-        run: terraform apply -auto-approve tfplan
+        run: terraform apply -auto-approve -parallelism=2 tfplan
 
       - name: Extract & Save Cluster Keys
         # Only run on Master pushes
