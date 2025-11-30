@@ -41,5 +41,5 @@ provider "proxmox" {
 
 provider "talos" {}
 
-# No configuration needed for Helm - it only renders text locally
+# No config needed - just the binary for templating
 provider "helm" {}
