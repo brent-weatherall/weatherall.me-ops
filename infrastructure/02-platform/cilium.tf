@@ -5,14 +5,9 @@ resource "helm_release" "cilium" {
   version    = "1.16.1"
   namespace  = "kube-system"
 
-  # Fire and Forget
-  wait       = false  
+  # We can wait now because Layer 1 ensured the cluster exists
+  wait       = true  
   timeout    = 600
-
-  depends_on = [
-    talos_machine_bootstrap.this,
-    data.talos_cluster_kubeconfig.this
-  ]
 
   values = [
     yamlencode({
@@ -28,10 +23,8 @@ resource "helm_release" "cilium" {
       hostRoot = "/sys/fs/cgroup"
       k8sServiceHost = "127.0.0.1"
       k8sServicePort = "7445"
-      
       cni = { exclusive = false }
       l7Proxy = false
-      
       l2announcements = { enabled = true }
       externalIPs = { enabled = true }
     })
