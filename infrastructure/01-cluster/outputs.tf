@@ -8,7 +8,6 @@ output "kubeconfig" {
   sensitive = true
 }
 
-# Exports for Layer 2
 output "control_plane_ip" {
   value = "192.168.1.51"
 }
