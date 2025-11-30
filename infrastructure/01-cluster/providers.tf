@@ -3,7 +3,7 @@ terraform {
 
   backend "s3" {
     bucket                      = "homelab-tf-state"
-    key                         = "talos/cluster.tfstate" # State File for Layer 1
+    key                         = "talos/cluster.tfstate"
     region                      = "auto"
     skip_credentials_validation = true
     skip_metadata_api_check     = true
@@ -25,21 +25,10 @@ terraform {
   }
 }
 
-variable "virtual_environment_endpoint" {
-  type        = string
-  description = "The URL of the Proxmox API"
-}
-
-variable "virtual_environment_api_token" {
-  type        = string
-  description = "The API Token"
-  sensitive   = true
-}
-
 provider "proxmox" {
   endpoint  = var.virtual_environment_endpoint
   api_token = var.virtual_environment_api_token
-  insecure  = true
+  insecure  = true 
   ssh {
     agent = false
   }

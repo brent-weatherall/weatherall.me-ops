@@ -1,3 +1,4 @@
+# 1. IMAGE FACTORY
 resource "talos_image_factory_schematic" "this" {
   schematic = yamlencode({
     customization = {
@@ -12,6 +13,7 @@ resource "talos_image_factory_schematic" "this" {
   })
 }
 
+# 2. ISO DOWNLOAD
 resource "proxmox_virtual_environment_download_file" "talos_iso" {
   content_type = "iso"
   datastore_id = "Local-ISOs"
@@ -21,6 +23,7 @@ resource "proxmox_virtual_environment_download_file" "talos_iso" {
   overwrite    = true
 }
 
+# 3. CONFIG GENERATION
 resource "talos_machine_secrets" "this" {}
 
 data "talos_machine_configuration" "controlplane" {
@@ -91,6 +94,7 @@ data "talos_machine_configuration" "worker" {
   ]
 }
 
+# 4. VIRTUAL MACHINES
 resource "proxmox_virtual_environment_vm" "controlplane" {
   name        = "talos-cp-01"
   node_name   = "pve"
@@ -98,9 +102,20 @@ resource "proxmox_virtual_environment_vm" "controlplane" {
   tags        = ["k8s", "talos", "control-plane"]
   boot_order  = ["ide3", "scsi0", "net0"]
 
-  cpu { cores = 2, type = "host" }
-  memory { dedicated = 4096, floating = 2048 }
-  agent { enabled = false } # Disabled to prevent hangs
+  cpu {
+    cores = 2
+    type  = "host"
+  }
+  
+  memory {
+    dedicated = 4096
+    floating  = 2048
+  }
+
+  agent { 
+    enabled = false 
+  }
+  
   depends_on = [proxmox_virtual_environment_download_file.talos_iso]
 
   disk {
@@ -115,13 +130,26 @@ resource "proxmox_virtual_environment_vm" "controlplane" {
   initialization {
     interface = "ide2"
     ip_config {
-      ipv4 { address = "192.168.1.51/24", gateway = "192.168.1.1" }
+      ipv4 {
+        address = "192.168.1.51/24"
+        gateway = "192.168.1.1"
+      }
     }
   }
 
-  network_device { bridge = "vmbr0" }
-  cdrom { enabled = true, interface = "ide3", file_id = proxmox_virtual_environment_download_file.talos_iso.id }
-  operating_system { type = "l26" }
+  network_device {
+    bridge = "vmbr0"
+  }
+
+  cdrom {
+    enabled   = true
+    interface = "ide3"
+    file_id   = proxmox_virtual_environment_download_file.talos_iso.id
+  }
+  
+  operating_system {
+    type = "l26"
+  }
 }
 
 resource "proxmox_virtual_environment_vm" "worker" {
@@ -132,9 +160,20 @@ resource "proxmox_virtual_environment_vm" "worker" {
   tags        = ["k8s", "talos", "worker"]
   boot_order  = ["ide3", "scsi0", "net0"]
   
-  cpu { cores = 4, type = "host" }
-  memory { dedicated = 8192, floating = 4096 }
-  agent { enabled = false }
+  cpu {
+    cores = 4
+    type  = "host"
+  }
+  
+  memory {
+    dedicated = 8192
+    floating  = 4096
+  }
+
+  agent { 
+    enabled = false 
+  }
+
   depends_on = [proxmox_virtual_environment_download_file.talos_iso]
 
   disk {
@@ -149,15 +188,29 @@ resource "proxmox_virtual_environment_vm" "worker" {
   initialization {
     interface = "ide2"
     ip_config {
-      ipv4 { address = "192.168.1.${52 + count.index}/24", gateway = "192.168.1.1" }
+      ipv4 {
+        address = "192.168.1.${52 + count.index}/24"
+        gateway = "192.168.1.1"
+      }
     }
   }
 
-  network_device { bridge = "vmbr0" }
-  cdrom { enabled = true, interface = "ide3", file_id = proxmox_virtual_environment_download_file.talos_iso.id }
-  operating_system { type = "l26" }
+  network_device {
+    bridge = "vmbr0"
+  }
+
+  cdrom {
+    enabled   = true
+    interface = "ide3"
+    file_id   = proxmox_virtual_environment_download_file.talos_iso.id
+  }
+  
+  operating_system {
+    type = "l26"
+  }
 }
 
+# 5. BOOTSTRAP
 resource "talos_machine_configuration_apply" "controlplane" {
   client_configuration        = talos_machine_secrets.this.client_configuration
   machine_configuration_input = data.talos_machine_configuration.controlplane.machine_configuration
@@ -179,6 +232,7 @@ resource "talos_machine_bootstrap" "this" {
   node                 = "192.168.1.51"
 }
 
+# 6. DATA SOURCES (Needed for Outputs)
 resource "talos_cluster_kubeconfig" "this" {
   depends_on           = [talos_machine_bootstrap.this]
   client_configuration = talos_machine_secrets.this.client_configuration
@@ -190,3 +244,6 @@ data "talos_client_configuration" "this" {
   client_configuration = talos_machine_secrets.this.client_configuration
   endpoints            = ["192.168.1.51"]
 }
+
+# Duplicate Data Source removed (it was creating a conflict with the resource above)
+# Use the resource output directly in outputs.tf
