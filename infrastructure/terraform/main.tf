@@ -1,6 +1,4 @@
-# ------------------------------------------------------------------------------
-# 1. TALOS IMAGE FACTORY
-# ------------------------------------------------------------------------------
+# 1. IMAGE FACTORY
 resource "talos_image_factory_schematic" "this" {
   schematic = yamlencode({
     customization = {
@@ -15,31 +13,23 @@ resource "talos_image_factory_schematic" "this" {
   })
 }
 
-# ------------------------------------------------------------------------------
 # 2. ISO DOWNLOAD
-# ------------------------------------------------------------------------------
 resource "proxmox_virtual_environment_download_file" "talos_iso" {
   content_type = "iso"
-  datastore_id = "Local-ISOs" 
+  datastore_id = "Local-ISOs"
   node_name    = "pve"
-  
   file_name    = "talos-v1.8.3-zfs.iso"
   url          = "https://factory.talos.dev/image/${talos_image_factory_schematic.this.id}/v1.8.3/nocloud-amd64.iso"
   overwrite    = true
 }
 
-# ------------------------------------------------------------------------------
-# 3. TALOS CONFIGURATION
-# ------------------------------------------------------------------------------
+# 3. CONFIG GENERATION
 resource "talos_machine_secrets" "this" {}
 
 data "talos_machine_configuration" "controlplane" {
   cluster_name     = "talos-home"
   machine_type     = "controlplane"
-  
-  # CRITICAL: Bootstrap using PHYSICAL IP (.51) to avoid VIP deadlock
-  cluster_endpoint = "https://192.168.1.51:6443" 
-  
+  cluster_endpoint = "https://192.168.1.51:6443" # Physical IP
   machine_secrets  = talos_machine_secrets.this.machine_secrets
   talos_version    = "v1.8.3"
   
@@ -51,9 +41,9 @@ data "talos_machine_configuration" "controlplane" {
           interfaces = [{
             interface = "eth0"
             dhcp      = false
-            addresses = ["192.168.1.51/24"] # Physical IP
+            addresses = ["192.168.1.51/24"]
             routes    = [{ network = "0.0.0.0/0", gateway = "192.168.1.1" }]
-            vip       = { ip = "192.168.1.50" } # Virtual IP (Future Use)
+            vip       = { ip = "192.168.1.50" }
           }]
           nameservers = ["1.1.1.1", "192.168.1.1"]
         }
@@ -74,7 +64,7 @@ data "talos_machine_configuration" "worker" {
   count            = 2
   cluster_name     = "talos-home"
   machine_type     = "worker"
-  cluster_endpoint = "https://192.168.1.51:6443" # Workers connect to Physical IP
+  cluster_endpoint = "https://192.168.1.51:6443" # Workers talk to Physical IP
   machine_secrets  = talos_machine_secrets.this.machine_secrets
   talos_version    = "v1.8.3"
   
@@ -104,9 +94,7 @@ data "talos_machine_configuration" "worker" {
   ]
 }
 
-# ------------------------------------------------------------------------------
 # 4. VIRTUAL MACHINES
-# ------------------------------------------------------------------------------
 resource "proxmox_virtual_environment_vm" "controlplane" {
   name        = "talos-cp-01"
   node_name   = "pve"
@@ -124,7 +112,7 @@ resource "proxmox_virtual_environment_vm" "controlplane" {
     floating  = 2048
   }
 
-  agent { enabled = false } # Disabled to prevent Terraform refresh hang
+  agent { enabled = false } # Disabled to prevent hang
   depends_on = [proxmox_virtual_environment_download_file.talos_iso]
 
   disk {
@@ -155,7 +143,6 @@ resource "proxmox_virtual_environment_vm" "controlplane" {
     interface = "ide3"
     file_id   = proxmox_virtual_environment_download_file.talos_iso.id
   }
-  
   operating_system {
     type = "l26"
   }
@@ -210,19 +197,16 @@ resource "proxmox_virtual_environment_vm" "worker" {
     interface = "ide3"
     file_id   = proxmox_virtual_environment_download_file.talos_iso.id
   }
-  
   operating_system {
     type = "l26"
   }
 }
 
-# ------------------------------------------------------------------------------
 # 5. BOOTSTRAP
-# ------------------------------------------------------------------------------
 resource "talos_machine_configuration_apply" "controlplane" {
   client_configuration        = talos_machine_secrets.this.client_configuration
   machine_configuration_input = data.talos_machine_configuration.controlplane.machine_configuration
-  node                        = "192.168.1.51" # Physical IP
+  node                        = "192.168.1.51"
   depends_on                  = [proxmox_virtual_environment_vm.controlplane]
 }
 
@@ -230,33 +214,34 @@ resource "talos_machine_configuration_apply" "worker" {
   count                       = 2
   client_configuration        = talos_machine_secrets.this.client_configuration
   machine_configuration_input = data.talos_machine_configuration.worker[count.index].machine_configuration
-  node                        = "192.168.1.${52 + count.index}" # Physical IP
+  node                        = "192.168.1.${52 + count.index}"
   depends_on                  = [proxmox_virtual_environment_vm.worker]
 }
 
 resource "talos_machine_bootstrap" "this" {
   depends_on           = [talos_machine_configuration_apply.controlplane]
   client_configuration = talos_machine_secrets.this.client_configuration
-  node                 = "192.168.1.51" # Physical IP
+  node                 = "192.168.1.51"
 }
 
-# ------------------------------------------------------------------------------
-# 6. DATA SOURCES & OUTPUTS
-# ------------------------------------------------------------------------------
-# This Data Source reads the config BACK from the cluster.
-# We force it to read from .51 (Physical) so the Helm Provider can connect.
-data "talos_cluster_kubeconfig" "this" {
+# 6. OUTPUTS
+resource "talos_cluster_kubeconfig" "this" {
   depends_on           = [talos_machine_bootstrap.this]
   client_configuration = talos_machine_secrets.this.client_configuration
   node                 = "192.168.1.51"
 }
 
-# This Data Source generates the config for YOU (the user).
-# We force this to .51 for now so your laptop works immediately.
 data "talos_client_configuration" "this" {
   cluster_name         = "talos-home"
   client_configuration = talos_machine_secrets.this.client_configuration
   endpoints            = ["192.168.1.51"]
+}
+
+# This Data Source exposes the Kubeconfig to the Helm provider
+data "talos_cluster_kubeconfig" "this" {
+  depends_on           = [talos_machine_bootstrap.this]
+  client_configuration = talos_machine_secrets.this.client_configuration
+  node                 = "192.168.1.51"
 }
 
 output "talosconfig" {
@@ -265,6 +250,6 @@ output "talosconfig" {
 }
 
 output "kubeconfig" {
-  value     = data.talos_cluster_kubeconfig.this.kubeconfig_raw
+  value     = talos_cluster_kubeconfig.this.kubeconfig_raw
   sensitive = true
 }

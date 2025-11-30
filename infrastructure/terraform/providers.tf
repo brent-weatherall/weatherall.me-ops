@@ -55,13 +55,9 @@ provider "proxmox" {
 
 provider "talos" {}
 
-# ------------------------------------------------------------------------------
-# KUBERNETES & HELM PROVIDERS
-# Connection uses data from main.tf, which is explicitly set to Physical IP (.51)
-# ------------------------------------------------------------------------------
-
+# FORCE connection to Physical IP (.51) to avoid VIP deadlocks during bootstrap
 provider "kubernetes" {
-  host                   = data.talos_cluster_kubeconfig.this.kubernetes_client_configuration.host
+  host                   = replace(data.talos_cluster_kubeconfig.this.kubernetes_client_configuration.host, "192.168.1.50", "192.168.1.51")
   client_certificate     = base64decode(data.talos_cluster_kubeconfig.this.kubernetes_client_configuration.client_certificate)
   client_key             = base64decode(data.talos_cluster_kubeconfig.this.kubernetes_client_configuration.client_key)
   cluster_ca_certificate = base64decode(data.talos_cluster_kubeconfig.this.kubernetes_client_configuration.ca_certificate)
@@ -69,7 +65,7 @@ provider "kubernetes" {
 
 provider "helm" {
   kubernetes {
-    host                   = data.talos_cluster_kubeconfig.this.kubernetes_client_configuration.host
+    host                   = replace(data.talos_cluster_kubeconfig.this.kubernetes_client_configuration.host, "192.168.1.50", "192.168.1.51")
     client_certificate     = base64decode(data.talos_cluster_kubeconfig.this.kubernetes_client_configuration.client_certificate)
     client_key             = base64decode(data.talos_cluster_kubeconfig.this.kubernetes_client_configuration.client_key)
     cluster_ca_certificate = base64decode(data.talos_cluster_kubeconfig.this.kubernetes_client_configuration.ca_certificate)
