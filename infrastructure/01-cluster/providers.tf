@@ -22,6 +22,11 @@ terraform {
       source  = "siderolabs/talos"
       version = "0.6.1"
     }
+    # Added for local template rendering
+    helm = {
+      source  = "hashicorp/helm"
+      version = "2.16.1"
+    }
   }
 }
 
@@ -35,3 +40,6 @@ provider "proxmox" {
 }
 
 provider "talos" {}
+
+# No configuration needed for Helm - it only renders text locally
+provider "helm" {}

@@ -23,13 +23,46 @@ resource "proxmox_virtual_environment_download_file" "talos_iso" {
   overwrite    = true
 }
 
+# ------------------------------------------------------------------------------
+# NEW: RENDER CILIUM MANIFEST LOCALLY
+# This generates the YAML but does not try to install it.
+# ------------------------------------------------------------------------------
+data "helm_template" "cilium" {
+  name       = "cilium"
+  repository = "https://helm.cilium.io/"
+  chart      = "cilium"
+  version    = "1.16.1"
+  namespace  = "kube-system"
+
+  values = [
+    yamlencode({
+      ipam = { mode = "kubernetes" }
+      kubeProxyReplacement = true
+      securityContext = {
+        capabilities = {
+          ciliumAgent = ["CHOWN","KILL","NET_ADMIN","NET_RAW","IPC_LOCK","SYS_ADMIN","SYS_RESOURCE","DAC_OVERRIDE","FOWNER","SETGID","SETUID"]
+          cleanCiliumState = ["NET_ADMIN","SYS_ADMIN","SYS_RESOURCE"]
+        }
+      }
+      cgroup = { autoMount = { enabled = false } }
+      hostRoot = "/sys/fs/cgroup"
+      k8sServiceHost = "127.0.0.1"
+      k8sServicePort = "7445"
+      cni = { exclusive = false }
+      l7Proxy = false
+      l2announcements = { enabled = true }
+      externalIPs = { enabled = true }
+    })
+  ]
+}
+
 # 3. CONFIG GENERATION
 resource "talos_machine_secrets" "this" {}
 
 data "talos_machine_configuration" "controlplane" {
   cluster_name     = "talos-home"
   machine_type     = "controlplane"
-  cluster_endpoint = "https://192.168.1.51:6443" # Physical IP (.51)
+  cluster_endpoint = "https://192.168.1.51:6443"
   machine_secrets  = talos_machine_secrets.this.machine_secrets
   talos_version    = "v1.8.3"
   
@@ -55,6 +88,14 @@ data "talos_machine_configuration" "controlplane" {
       cluster = {
         network = { cni = { name = "none" } }
         proxy   = { disabled = true }
+        
+        # THE FIX: Inject Cilium Manifest directly into Talos Config
+        inlineManifests = [
+          {
+            name     = "cilium"
+            contents = data.helm_template.cilium.manifest
+          }
+        ]
       }
     })
   ]
@@ -100,7 +141,7 @@ resource "proxmox_virtual_environment_vm" "controlplane" {
   node_name   = "pve"
   vm_id       = 200
   tags        = ["k8s", "talos", "control-plane"]
-  boot_order  = ["ide3", "scsi0", "net0"]
+  boot_order  = ["scsi0", "ide3", "net0"] # Hard Drive First
 
   cpu {
     cores = 2
@@ -112,10 +153,7 @@ resource "proxmox_virtual_environment_vm" "controlplane" {
     floating  = 2048
   }
 
-  agent { 
-    enabled = false 
-  }
-  
+  agent { enabled = false }
   depends_on = [proxmox_virtual_environment_download_file.talos_iso]
 
   disk {
@@ -137,19 +175,9 @@ resource "proxmox_virtual_environment_vm" "controlplane" {
     }
   }
 
-  network_device {
-    bridge = "vmbr0"
-  }
-
-  cdrom {
-    enabled   = true
-    interface = "ide3"
-    file_id   = proxmox_virtual_environment_download_file.talos_iso.id
-  }
-  
-  operating_system {
-    type = "l26"
-  }
+  network_device { bridge = "vmbr0" }
+  cdrom { enabled = true, interface = "ide3", file_id = proxmox_virtual_environment_download_file.talos_iso.id }
+  operating_system { type = "l26" }
 }
 
 resource "proxmox_virtual_environment_vm" "worker" {
@@ -158,22 +186,11 @@ resource "proxmox_virtual_environment_vm" "worker" {
   node_name   = "pve"
   vm_id       = 300 + count.index
   tags        = ["k8s", "talos", "worker"]
-  boot_order  = ["ide3", "scsi0", "net0"]
+  boot_order  = ["scsi0", "ide3", "net0"] # Hard Drive First
   
-  cpu {
-    cores = 4
-    type  = "host"
-  }
-  
-  memory {
-    dedicated = 8192
-    floating  = 4096
-  }
-
-  agent { 
-    enabled = false 
-  }
-
+  cpu { cores = 4, type = "host" }
+  memory { dedicated = 8192, floating = 4096 }
+  agent { enabled = false }
   depends_on = [proxmox_virtual_environment_download_file.talos_iso]
 
   disk {
@@ -188,26 +205,13 @@ resource "proxmox_virtual_environment_vm" "worker" {
   initialization {
     interface = "ide2"
     ip_config {
-      ipv4 {
-        address = "192.168.1.${52 + count.index}/24"
-        gateway = "192.168.1.1"
-      }
+      ipv4 { address = "192.168.1.${52 + count.index}/24", gateway = "192.168.1.1" }
     }
   }
 
-  network_device {
-    bridge = "vmbr0"
-  }
-
-  cdrom {
-    enabled   = true
-    interface = "ide3"
-    file_id   = proxmox_virtual_environment_download_file.talos_iso.id
-  }
-  
-  operating_system {
-    type = "l26"
-  }
+  network_device { bridge = "vmbr0" }
+  cdrom { enabled = true, interface = "ide3", file_id = proxmox_virtual_environment_download_file.talos_iso.id }
+  operating_system { type = "l26" }
 }
 
 # 5. BOOTSTRAP
@@ -232,7 +236,6 @@ resource "talos_machine_bootstrap" "this" {
   node                 = "192.168.1.51"
 }
 
-# 6. DATA SOURCES (Needed for Outputs)
 resource "talos_cluster_kubeconfig" "this" {
   depends_on           = [talos_machine_bootstrap.this]
   client_configuration = talos_machine_secrets.this.client_configuration
@@ -244,6 +247,3 @@ data "talos_client_configuration" "this" {
   client_configuration = talos_machine_secrets.this.client_configuration
   endpoints            = ["192.168.1.51"]
 }
-
-# Duplicate Data Source removed (it was creating a conflict with the resource above)
-# Use the resource output directly in outputs.tf
